@@ -40,7 +40,7 @@ def checkAndUpdateAmount(uid,amount):
     if amount > userCurrentAmount:
         #user exced his credit, not able to play
         raise Exception('Pas assez d\'argent sur votre compte, votre solde est de {}.  \
-Envoyer un paypal a rbresson@gmail.com avec votre uid en commentaire pour recrediter votre comte'.format(userCurrentAmount)) 
+Envoyer un paypal a ****@gmail.com avec votre uid en commentaire pour recrediter votre comte'.format(userCurrentAmount)) 
     else:
         # retire le montant du paris de son credit
         newAmount=userCurrentAmount - amount
