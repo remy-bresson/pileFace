@@ -1,0 +1,6 @@
+source env/bin/activate
+python-lambda-local -f lambda_handler register.py testevent.json -e environmentVar.json
+
+
+deactivate
+conda deactivate

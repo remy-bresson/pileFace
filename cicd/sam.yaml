@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Pile ou face project
+
+Parameters:
+  DynamoTableName:
+    Type: String
+    Default: "PileFaceUserBase"
+  UidDeployment:
+    Type: String
+  StageName:
+    Type: String
+    Default: "DEV"
+
+   
+
+Resources:
+  APIPileFace:
+    Type: AWS::Serverless::Api
+    Depends: RoleForApiGatewayToInvokeStepFunctionAndDynamoDb
+    Properties:
+      StageName: !Ref StageName
+      Name: PileOuFace
+      MethodSettings:
+        - DataTraceEnabled: true
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          ResourcePath: "/*"
+          MetricsEnabled: true          
+      DefinitionBody:
+        'Fn::Transform':
+          Name: 'AWS::Include'
+          Parameters:
+            Location: !Sub s3://edfx-rbn-pileface/swagger/pileface.yaml
+      EndpointConfiguration: EDGE  
+  
+  UserDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoTableName
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  RegisterBackend:
+    Type: AWS::Serverless::Function
+    DependsOn: UserDynamoDBTable
+    Properties:
+      FunctionName: register      
+      CodeUri: ../lambda/register/register.zip
+      Handler: register.lambda_handler
+      Runtime: python3.8       
+      MemorySize: 128    
+      Timeout: 3      
+      Policies:
+        - AWSLambdaExecute
+        - Version: '2012-10-17' 
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:*                
+              Resource: !GetAtt UserDynamoDBTable.Arn
+      Environment:
+        Variables:
+          DYNAMO_TABLE_NAME: PileFaceUserBase
+
+  LambdaPermissionLambdaRegister:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt RegisterBackend.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join
+        - ""
+        - - "arn:aws:execute-api:"
+          - !Ref AWS::Region
+          - ":"
+          - !Ref AWS::AccountId
+          - ":"
+          - !Ref APIPileFace
+          - "/*"
+
+  BetBackend:
+    Type: AWS::Serverless::Function
+    DependsOn: UserDynamoDBTable
+    Properties:
+      FunctionName: bet      
+      CodeUri: ../lambda/bet/bet.zip
+      Handler: bet.lambda_handler
+      Runtime: python3.8       
+      MemorySize: 128    
+      Timeout: 3      
+      Policies:
+        - AWSLambdaExecute
+        - Version: '2012-10-17' 
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:*                
+              Resource: !GetAtt UserDynamoDBTable.Arn
+      Environment:
+        Variables:
+          DYNAMO_TABLE_NAME: PileFaceUserBase
+
+  LambdaPermissionLambdaBet:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt BetBackend.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join
+        - ""
+        - - "arn:aws:execute-api:"
+          - !Ref AWS::Region
+          - ":"
+          - !Ref AWS::AccountId
+          - ":"
+          - !Ref APIPileFace
+          - "/*"
+  
+  AutoBetStepFunction:
+    Type: AWS::Serverless::StateMachine
+    Properties:      
+      DefinitionUri: ../stepFunction/function1.json
+      DefinitionSubstitutions:
+        RegisterFunctionArn: !GetAtt RegisterBackend.Arn
+        BetFunctionArn: !GetAtt BetBackend.Arn
+        DynamoTableName: !Ref DynamoTableName
+      Policies:
+      - LambdaInvokePolicy:
+          FunctionName: !Ref BetBackend
+      - LambdaInvokePolicy:
+          FunctionName: !Ref RegisterBackend
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UserDynamoDBTable
+
+  RoleForApiGatewayToInvokeStepFunctionAndDynamoDb:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: RoleForApiGatewayToInvokeStepFunctionAndDynamoDb
+      AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - apigateway.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      Policies:
+        - PolicyName: invokeStepFuntion
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'states:StartExecution'
+                Resource: !Ref AutoBetStepFunction
+        - PolicyName: getDynamoDb
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'dynamoDb:getItem'
+                Resource: !GetAtt UserDynamoDBTable.Arn
+
+Outputs:
+  APIUrl:
+    Description: API url
+    Value: !Join 
+      - ""
+      - - "https://"
+        - !Ref APIPileFace
+        - "."
+        - "execute-api"
+        - "."
+        - !Ref AWS::Region
+        - "."
+        - "amazonaws.com"
+        - "/"
+        - !Ref StageName
+

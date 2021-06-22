@@ -1,0 +1,144 @@
+openapi: "3.0.1"
+info:
+  title: "heads or tails"
+  description: "heads or tails game api"
+  version: "1.0.0"
+paths:
+  /amount/{uid}:
+    parameters:
+      - name: "uid"
+        in: "path"
+        type: "string"
+        required: true
+    get:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        "200":
+          description: "200 response"
+      x-amazon-apigateway-integration:
+        type: "aws"
+        httpMethod: "POST"
+        credentials: 
+          Fn::Sub:
+            "${RoleForApiGatewayToInvokeStepFunctionAndDynamoDb.Arn}"
+        uri: 
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:dynamodb:action/GetItem"                  
+        responses:
+          default:
+            statusCode: "200"
+            responseTemplates:
+              application/json: "#set($inputRoot = $input.path('$')){\"amount\": \"$inputRoot.Item.amount.N\"}"
+        requestTemplates:
+          application/json:
+            Fn::Sub:
+              - '{"TableName": "${tableName}","Key": {"userId": {"S": "$method.request.path.uid"}},"ProjectionExpression":"amount","ConsistentRead": true}'
+              - tableName:
+                  Ref: DynamoTableName
+        passthroughBehavior: "when_no_templates"
+  /autoplay:
+    post:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        "200":
+          description: "200 response"
+      x-amazon-apigateway-integration:        
+        httpMethod: "POST"
+        credentials: 
+          Fn::Sub:
+            "${RoleForApiGatewayToInvokeStepFunctionAndDynamoDb.Arn}"
+        uri: 
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:states:action/StartExecution"                 
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_templates"
+        contentHandling: "CONVERT_TO_TEXT"
+        type: "aws"
+        requestTemplates:
+          application/json:  
+            Fn::Sub:
+              - '{"input": "$util.escapeJavaScript($input.json(''$''))","stateMachineArn":"${arn}"}'
+              - arn:
+                  Ref: AutoBetStepFunction
+  /register:
+    post:
+      operationId: "register"
+      parameters:
+      - name: "lastname"
+        in: "query"
+        required: true
+        schema:
+          type: "string"
+      - name: "firstname"
+        in: "query"
+        required: true
+        schema:
+          type: "string"
+      responses:
+        "400":
+          description: "400 response"
+          content: {}
+        "200":
+          description: "200 response"
+          content: {}
+      x-amazon-apigateway-integration:        
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RegisterBackend.Arn}/invocations"        
+        httpMethod: "POST"
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "NEVER"
+        contentHandling: "CONVERT_TO_TEXT"
+        type: "aws"
+        requestTemplates:
+          application/json:
+            "{\"firstname\" : \"$method.request.querystring.firstname\", \"lastname\": \"$method.request.querystring.lastname\"}"
+
+  /bet:
+    post:
+      operationId: "bet"
+      parameters:
+      - name: "uid"
+        in: "header"
+        required: true
+        schema:
+          type: "string"
+      - name: "bet"
+        in: "query"
+        required: true
+        schema:
+          type: "string"
+      - name: "amount"
+        in: "query"
+        required: true
+        schema:
+          type: "integer"
+      responses:
+        "400":
+          description: "400 response"
+          content: {}
+        "200":
+          description: "200 response"
+          content: {}
+      x-amazon-apigateway-integration:        
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BetBackend.Arn}/invocations"        
+        httpMethod: "POST"
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "NEVER"
+        contentHandling: "CONVERT_TO_TEXT"
+        type: "aws"
+        requestTemplates:
+          application/json:
+            "{\"uid\" : \"$method.request.header.uid\", \"bet\": \"$method.request.querystring.bet\", \"amount\": \"$method.request.querystring.amount\"}"
+        
+components: {}

@@ -1,0 +1,146 @@
+{
+    "Comment": "A Hello World example demonstrating various state types of the Amazon States Language",
+    "StartAt": "HasUserInInput",
+    "States": {
+      "HasUserInInput": {
+        "Comment": "Is the worload launched with a userId ?",
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.userId",
+            "IsPresent": true,            
+            "Next": "ValidUserId"          
+          },
+          {
+            "Variable": "$.userId",
+            "IsPresent": false,
+            "Next": "CreateUser"            
+          }
+        ],
+        "Default": "NotAbleToRegister"
+      },
+      "ValidUserId":{
+        "Type": "Pass",        
+        "ResultPath": "$.validatedUserInfo", 
+        "Next": "Init nb play in db"
+
+      },
+      "CreateUser": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Parameters": {
+          "FunctionName": "${RegisterFunctionArn}",
+          "Payload": {           
+            "firstname":"XX",
+            "lastname":"YYY"
+            }
+          },
+        "ResultSelector": {
+          "userId.$": "$.Payload" 
+        },
+        "ResultPath": "$.validatedUserInfo", 
+        "Next": "Init nb play in db"
+      },
+      "Init nb play in db": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::dynamodb:updateItem",
+        "Parameters": {
+          "TableName": "${DynamoTableName}",
+          "Key": {
+            "userId.$": "$.validatedUserInfo.userId"
+          },
+          "UpdateExpression": "set nbPlay = :val1",
+          "ExpressionAttributeValues": {
+            ":val1": {"N": "0"}
+        },
+          "ReturnValues" : "NONE"
+        },
+        "ResultPath": null,
+        "Next": "TirerPileOuFace"
+      },
+      "TirerPileOuFace": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "InputPath": "$.validatedUserInfo",
+        "Parameters": {
+          "FunctionName": "${BetFunctionArn}",
+          "Payload": {           
+            "uid.$": "$.userId",
+            "bet":"pile",    
+            "amount":"1"
+            }
+          },
+        "ResultSelector": {          
+            "userCredit.$": "$.Payload.currentAmount"
+          },
+        "ResultPath": "$.Bet",
+        "Next": "Increment nb play in db"    
+      },
+      "Increment nb play in db": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::dynamodb:updateItem",
+        "Parameters": {
+          "TableName": "${DynamoTableName}",
+          "Key": {
+            "userId.$": "$.validatedUserInfo.userId"
+          },
+          "UpdateExpression": "set nbPlay = nbPlay + :val1",
+          "ExpressionAttributeValues": {
+            ":val1": {"N": "1"}
+        },
+          "ReturnValues": "ALL_NEW"
+        },
+        "ResultSelector": {          
+          "value.$": "$.Attributes.nbPlay.N"
+        },
+        "ResultPath": "$.nbPlay",
+        "Next": "Wait 1 sec"
+      },
+      "EncoreMonaie":
+      {
+        "Type": "Choice",
+        "Comment": "Avez vous encore de quoi jouer ?",        
+        "Choices": [
+          {
+            "And": [
+              {
+                "Variable": "$.Bet.userCredit",
+                "NumericGreaterThanEquals": 1
+              },
+              {
+                "Variable": "$.Bet.userCredit",
+                "NumericLessThan": 12
+              }
+            ],
+            "Next": "TirerPileOuFace"
+          },
+          {
+            "Variable": "$.Bet.userCredit",
+            "NumericGreaterThanEquals": 12,            
+            "Next": "StopEnPositif"          
+          }             
+        ],
+        "Default": "NoMoreMoney"
+      },
+
+      "NotAbleToRegister": {
+        "Type": "Fail",
+        "Cause": "No able to register because identity not passed"
+      },
+      "NoMoreMoney": {
+        "Type": "Pass",
+        "End": true
+      },
+      "StopEnPositif":{
+        "Comment": "Le joueur s'arrete ici avec un gain suffisant",
+        "Type": "Pass",
+        "End": true
+      },
+      "Wait 1 sec": {
+        "Comment": "A Wait state delays the state machine from continuing for a specified time.",
+        "Type": "Wait",
+        "Seconds": 1,
+        "Next": "EncoreMonaie"        
+      }      
+    }
+  }
