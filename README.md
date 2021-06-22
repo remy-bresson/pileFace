@@ -11,3 +11,7 @@ Everything is deployed using SAM + Cloudformation.
 To deploy it : 
 - cd cicd
 - ./deploy.sh
+
+
+## NOTE
+Nothing has been done regarding UI except initializing a react project
