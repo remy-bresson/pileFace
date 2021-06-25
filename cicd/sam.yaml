@@ -11,10 +11,22 @@ Parameters:
   StageName:
     Type: String
     Default: "DEV"
+  LambdaSigningProfileProfileVersionArn:
+    Type: String    
 
    
 
 Resources:
+  MySignedFunctionCodeSigningConfig:
+    Type: AWS::Lambda::CodeSigningConfig
+    Properties:
+      Description: "Code Signing for pile face lambda functions"
+      AllowedPublishers:
+        SigningProfileVersionArns:
+          - !Ref LambdaSigningProfileProfileVersionArn
+      CodeSigningPolicies:
+        UntrustedArtifactOnDeployment: "Enforce"        
+
   APIPileFace:
     Type: AWS::Serverless::Api
     Depends: RoleForApiGatewayToInvokeStepFunctionAndDynamoDb
@@ -54,6 +66,7 @@ Resources:
     Properties:
       FunctionName: register      
       CodeUri: ../lambda/register/register.zip
+      CodeSigningConfigArn: !Ref MySignedFunctionCodeSigningConfig
       Handler: register.lambda_handler
       Runtime: python3.8       
       MemorySize: 128    
@@ -92,6 +105,7 @@ Resources:
     Properties:
       FunctionName: bet      
       CodeUri: ../lambda/bet/bet.zip
+      CodeSigningConfigArn: !Ref MySignedFunctionCodeSigningConfig
       Handler: bet.lambda_handler
       Runtime: python3.8       
       MemorySize: 128    
@@ -170,6 +184,7 @@ Resources:
               - Effect: Allow
                 Action: 'dynamoDb:getItem'
                 Resource: !GetAtt UserDynamoDBTable.Arn
+
 
 Outputs:
   APIUrl:

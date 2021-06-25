@@ -10,7 +10,18 @@ Parameters:
   StageName:
     Type: String
     Default: DEV
+  LambdaSigningProfileProfileVersionArn:
+    Type: String
 Resources:
+  MySignedFunctionCodeSigningConfig:
+    Type: AWS::Lambda::CodeSigningConfig
+    Properties:
+      Description: Code Signing for pile face lambda functions
+      AllowedPublishers:
+        SigningProfileVersionArns:
+        - Ref: LambdaSigningProfileProfileVersionArn
+      CodeSigningPolicies:
+        UntrustedArtifactOnDeployment: Enforce
   APIPileFace:
     Type: AWS::Serverless::Api
     Depends: RoleForApiGatewayToInvokeStepFunctionAndDynamoDb
@@ -50,7 +61,9 @@ Resources:
     DependsOn: UserDynamoDBTable
     Properties:
       FunctionName: register
-      CodeUri: s3://edfx-rbn-pileface/45b40f7c13d9d303cb2fb95ce3b1d15d
+      CodeUri: s3://edfx-rbn-pileface/711a65f9a44941a048a888c30d99d400/signed_46515a1a-0d23-4635-a644-6fd9634e9772
+      CodeSigningConfigArn:
+        Ref: MySignedFunctionCodeSigningConfig
       Handler: register.lambda_handler
       Runtime: python3.8
       MemorySize: 128
@@ -93,7 +106,9 @@ Resources:
     DependsOn: UserDynamoDBTable
     Properties:
       FunctionName: bet
-      CodeUri: s3://edfx-rbn-pileface/3ed9a3fe05e09e22067469754479d066
+      CodeUri: s3://edfx-rbn-pileface/5c1fc2ebf054e39f0108c739e8d92256/signed_6e9e8d86-d910-48f8-98e0-2618a76e7dbc
+      CodeSigningConfigArn:
+        Ref: MySignedFunctionCodeSigningConfig
       Handler: bet.lambda_handler
       Runtime: python3.8
       MemorySize: 128
