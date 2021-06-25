@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Pile ou face project
+
+Resources:
+  PileFaceSigningProfile:
+    Type: AWS::Signer::SigningProfile
+    Properties: 
+      PlatformId: "AWSLambda-SHA384-ECDSA"      
+      SignatureValidityPeriod: 
+        Type: MONTHS
+        Value: 6      
+  
+
+Outputs:
+  SigningCodeConfig:
+    Description: SigningProfile ID
+    Value: !Ref PileFaceSigningProfile
